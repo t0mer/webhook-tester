@@ -153,6 +153,63 @@ func TestRateLimit(t *testing.T) {
 	}
 }
 
+func TestRecordNonHTTP(t *testing.T) {
+	s := newStore(t)
+	tok := mkToken(t, s, nil)
+	c := New(s, "http://x")
+
+	req := &models.Request{
+		UUID:    uuid.NewString(),
+		TokenID: tok.UUID,
+		Type:    models.RequestTypeEmail,
+		Sender:  "a@b.com",
+		Subject: "hi",
+	}
+	if err := c.Record(context.Background(), tok, req); err != nil {
+		t.Fatalf("Record: %v", err)
+	}
+	got, err := s.GetRequest(context.Background(), req.UUID)
+	if err != nil || got.Type != models.RequestTypeEmail {
+		t.Fatalf("recorded email not found: %v / %+v", err, got)
+	}
+}
+
+func TestRecordExpired(t *testing.T) {
+	s := newStore(t)
+	tok := mkToken(t, s, func(tk *models.Token) {
+		tk.Expiry = 1
+		tk.CreatedAt = time.Now().Add(-time.Hour)
+	})
+	c := New(s, "http://x")
+	req := &models.Request{UUID: uuid.NewString(), TokenID: tok.UUID, Type: models.RequestTypeDNS}
+	if err := c.Record(context.Background(), tok, req); err != ErrExpired {
+		t.Errorf("Record on expired = %v, want ErrExpired", err)
+	}
+}
+
+func TestSaveFile(t *testing.T) {
+	s := newStore(t)
+	tok := mkToken(t, s, nil)
+	dir := t.TempDir()
+	c := New(s, "http://x", WithFilesDir(dir))
+
+	req := &models.Request{UUID: uuid.NewString(), TokenID: tok.UUID, Type: models.RequestTypeEmail}
+	if err := c.Record(context.Background(), tok, req); err != nil {
+		t.Fatal(err)
+	}
+	f, err := c.SaveFile(context.Background(), req.UUID, "doc.txt", "text/plain", []byte("data"))
+	if err != nil {
+		t.Fatalf("SaveFile: %v", err)
+	}
+	if f.Size != 4 {
+		t.Errorf("size = %d, want 4", f.Size)
+	}
+	files, err := s.ListFilesByRequest(context.Background(), req.UUID)
+	if err != nil || len(files) != 1 || files[0].Filename != "doc.txt" {
+		t.Fatalf("file not recorded: %v / %+v", err, files)
+	}
+}
+
 func TestResolveByAlias(t *testing.T) {
 	s := newStore(t)
 	tok := mkToken(t, s, func(tk *models.Token) { tk.Alias = "myalias" })

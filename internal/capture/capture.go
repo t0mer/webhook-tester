@@ -5,9 +5,12 @@ package capture
 
 import (
 	"context"
+	"errors"
 	"io"
 	"net"
 	"net/http"
+	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -17,6 +20,9 @@ import (
 	"github.com/t0mer/raptor/internal/models"
 	"github.com/t0mer/raptor/internal/store"
 )
+
+// ErrExpired is returned by Record when the token's TTL has elapsed.
+var ErrExpired = errors.New("token expired")
 
 // DefaultMaxBodyBytes is the cap applied to captured request bodies.
 const DefaultMaxBodyBytes int64 = 10 << 20 // 10 MiB
@@ -36,7 +42,8 @@ type Capturer struct {
 	store        *store.Store
 	baseURL      string
 	maxBodyBytes int64
-	globalLimit  int // config --max-requests; fallback when token.RequestLimit == 0
+	globalLimit  int    // config --max-requests; fallback when token.RequestLimit == 0
+	filesDir     string // directory for stored attachment/file blobs
 	limiter      *rateLimiter
 	pub          Publisher
 }
@@ -65,6 +72,11 @@ func WithMaxBodyBytes(n int64) Option {
 // WithGlobalRequestLimit sets the fallback per-token stored-request cap.
 func WithGlobalRequestLimit(n int) Option {
 	return func(c *Capturer) { c.globalLimit = n }
+}
+
+// WithFilesDir sets the directory where attachment/file blobs are written.
+func WithFilesDir(dir string) Option {
+	return func(c *Capturer) { c.filesDir = dir }
 }
 
 // New constructs a Capturer.
@@ -119,18 +131,66 @@ func (c *Capturer) Handle(w http.ResponseWriter, r *http.Request, token *models.
 
 	req := c.buildRequest(r, token, now)
 
+	if err := c.persist(r.Context(), token, req); err != nil {
+		http.Error(w, "failed to store request", http.StatusInternalServerError)
+		return
+	}
+
+	c.writeResponse(w, token, statusOverride)
+}
+
+// Record stores a non-HTTP captured request (email, DNS) against a token,
+// enforcing expiry and the stored-request limit, then publishes it. Returns
+// ErrExpired if the token's TTL has elapsed.
+func (c *Capturer) Record(ctx context.Context, token *models.Token, req *models.Request) error {
+	if IsExpired(token, time.Now().UTC()) {
+		metrics.RequestsRejected.WithLabelValues("expired").Inc()
+		return ErrExpired
+	}
+	return c.persist(ctx, token, req)
+}
+
+// persist stores a request, increments metrics, and fans it out to subscribers.
+func (c *Capturer) persist(ctx context.Context, token *models.Token, req *models.Request) error {
 	limit := token.RequestLimit
 	if limit == 0 {
 		limit = c.globalLimit
 	}
-	if err := c.store.CreateRequest(r.Context(), req, limit); err != nil {
-		http.Error(w, "failed to store request", http.StatusInternalServerError)
-		return
+	if err := c.store.CreateRequest(ctx, req, limit); err != nil {
+		return err
 	}
 	metrics.RequestsCaptured.WithLabelValues(req.Type).Inc()
 	c.pub.Publish(token.UUID, req)
+	return nil
+}
 
-	c.writeResponse(w, token, statusOverride)
+// SaveFile writes a captured file blob under the configured files directory and
+// records it against a request. Used for email attachments.
+func (c *Capturer) SaveFile(ctx context.Context, requestID, filename, contentType string, data []byte) (*models.File, error) {
+	if c.filesDir == "" {
+		return nil, errors.New("files directory not configured")
+	}
+	if err := os.MkdirAll(c.filesDir, 0o750); err != nil {
+		return nil, err
+	}
+	id := uuid.NewString()
+	path := filepath.Join(c.filesDir, id)
+	if err := os.WriteFile(path, data, 0o640); err != nil {
+		return nil, err
+	}
+	f := &models.File{
+		ID:          id,
+		RequestID:   requestID,
+		Filename:    filename,
+		ContentType: contentType,
+		Size:        len(data),
+		Path:        path,
+	}
+	if err := c.store.CreateFile(ctx, f); err != nil {
+		_ = os.Remove(path)
+		return nil, err
+	}
+	return f, nil
 }
 
 func (c *Capturer) buildRequest(r *http.Request, token *models.Token, now time.Time) *models.Request {
