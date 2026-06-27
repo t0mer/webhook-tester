@@ -3,22 +3,48 @@
 package main
 
 import (
+	"errors"
 	"fmt"
+	"log/slog"
 	"os"
 
+	flag "github.com/spf13/pflag"
+
+	"github.com/t0mer/raptor/internal/config"
 	"github.com/t0mer/raptor/internal/version"
 )
 
 func main() {
-	// Minimal bootstrap. Full flag/env configuration is wired up in
-	// internal/config and consumed here in a subsequent change.
-	for _, arg := range os.Args[1:] {
-		switch arg {
-		case "--version", "-v":
-			fmt.Println(version.Version)
-			return
+	cfg, err := config.Load(os.Args[1:], os.Getenv)
+	if err != nil {
+		if errors.Is(err, flag.ErrHelp) {
+			return // pflag already printed usage
 		}
+		fmt.Fprintln(os.Stderr, "raptor:", err)
+		os.Exit(2)
 	}
 
-	fmt.Fprintf(os.Stderr, "raptor %s: server not yet wired up\n", version.Version)
+	if cfg.ShowVersion {
+		fmt.Println(version.Version)
+		return
+	}
+
+	logger := newLogger(cfg)
+	slog.SetDefault(logger)
+
+	logger.Info("raptor starting",
+		"version", version.Version,
+		"port", cfg.Port,
+		"data", cfg.Data,
+		"db_driver", cfg.DBDriver,
+		"base_url", cfg.BaseURL,
+	)
+
+	// Server wiring (store, capture, API, SSE) is added in subsequent changes.
+	logger.Warn("server not yet wired up; exiting")
+}
+
+func newLogger(cfg config.Config) *slog.Logger {
+	opts := &slog.HandlerOptions{Level: cfg.SlogLevel()}
+	return slog.New(slog.NewTextHandler(os.Stderr, opts))
 }
