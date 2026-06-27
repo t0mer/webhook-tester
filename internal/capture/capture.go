@@ -49,6 +49,7 @@ type Capturer struct {
 	limiter      *rateLimiter
 	pub          Publisher
 	actions      *actions.Service // optional; runs the action chain on HTTP capture
+	forwarder    *forwarder       // CLI `listen` response coordination
 }
 
 // Option configures a Capturer.
@@ -95,6 +96,7 @@ func New(st *store.Store, baseURL string, opts ...Option) *Capturer {
 		maxBodyBytes: DefaultMaxBodyBytes,
 		limiter:      newRateLimiter(),
 		pub:          nopPublisher{},
+		forwarder:    newForwarder(),
 	}
 	for _, o := range opts {
 		o(c)
@@ -172,7 +174,49 @@ func (c *Capturer) Handle(w http.ResponseWriter, r *http.Request, token *models.
 		}
 	}
 
+	// CLI forwarding: when listen > 0 and no action produced a response, hold the
+	// request open until a CLI client sets a response (or the window elapses).
+	if token.Listen > 0 && engineResp == nil && !dontSave {
+		ch := c.forwarder.register(req.UUID)
+		select {
+		case fr := <-ch:
+			c.writeForwarded(w, token, fr)
+			return
+		case <-time.After(time.Duration(token.Listen) * time.Second):
+			c.forwarder.cancel(req.UUID)
+		case <-r.Context().Done():
+			c.forwarder.cancel(req.UUID)
+			return
+		}
+	}
+
 	c.writeResponse(w, token, statusOverride, engineResp)
+}
+
+// SetResponse delivers a CLI-supplied response to a pending captured request
+// (the listen flow). Returns false if no request is waiting for that id.
+func (c *Capturer) SetResponse(requestID string, status int, content string, headers map[string]string) bool {
+	if status == 0 {
+		status = http.StatusOK
+	}
+	return c.forwarder.deliver(requestID, forwardResponse{status: status, content: content, headers: headers})
+}
+
+func (c *Capturer) writeForwarded(w http.ResponseWriter, token *models.Token, fr forwardResponse) {
+	h := w.Header()
+	if token.CORS {
+		h.Set("Access-Control-Allow-Origin", "*")
+		h.Set("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS")
+		h.Set("Access-Control-Allow-Headers", "*")
+	}
+	for k, v := range fr.headers {
+		h.Set(k, v)
+	}
+	if h.Get("Content-Type") == "" {
+		h.Set("Content-Type", "text/plain")
+	}
+	w.WriteHeader(fr.status)
+	_, _ = io.WriteString(w, fr.content)
 }
 
 // Record stores a non-HTTP captured request (email, DNS) against a token,

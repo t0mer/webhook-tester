@@ -285,6 +285,31 @@ paths:
                 type: object
                 properties:
                   data: { type: array, items: { $ref: "#/components/schemas/ActionRun" } }
+  /tokens/{tokenID}/requests/{requestID}/response:
+    parameters:
+      - $ref: "#/components/parameters/TokenID"
+      - $ref: "#/components/parameters/RequestID"
+    post:
+      summary: Supply the response for a pending request (CLI listen flow)
+      operationId: setResponse
+      description: >
+        When the token has `listen > 0`, a capture is held open until this
+        endpoint supplies a response. Body may be base64 (`content`) or raw
+        (`content_text`).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                status: { type: integer }
+                content: { type: string, description: "base64-encoded body" }
+                content_text: { type: string, description: "raw body (alternative to content)" }
+                headers: { type: object, additionalProperties: { type: string } }
+      responses:
+        "204": { description: Response delivered }
+        "404": { description: No request is waiting (not listening / already responded) }
   /tokens/{tokenID}/requests/{requestID}/execute:
     parameters:
       - $ref: "#/components/parameters/TokenID"

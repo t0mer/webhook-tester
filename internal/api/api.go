@@ -13,6 +13,12 @@ import (
 	"github.com/t0mer/raptor/internal/store"
 )
 
+// ResponseForwarder delivers a CLI-supplied response to a pending captured
+// request (the listen flow). Implemented by *capture.Capturer.
+type ResponseForwarder interface {
+	SetResponse(requestID string, status int, content string, headers map[string]string) bool
+}
+
 // API holds dependencies for the management handlers.
 type API struct {
 	store     *store.Store
@@ -20,11 +26,12 @@ type API struct {
 	hub       *sse.Hub
 	actions   *actions.Service
 	schedules *schedules.Runner
+	forwarder ResponseForwarder
 }
 
 // New constructs an API.
-func New(st *store.Store, baseURL string, hub *sse.Hub, actionsSvc *actions.Service, runner *schedules.Runner) *API {
-	return &API{store: st, baseURL: baseURL, hub: hub, actions: actionsSvc, schedules: runner}
+func New(st *store.Store, baseURL string, hub *sse.Hub, actionsSvc *actions.Service, runner *schedules.Runner, forwarder ResponseForwarder) *API {
+	return &API{store: st, baseURL: baseURL, hub: hub, actions: actionsSvc, schedules: runner, forwarder: forwarder}
 }
 
 // Routes returns a chi router mounted under /api/v1.
@@ -84,6 +91,7 @@ func (a *API) Routes() chi.Router {
 				r.Get("/{requestID}/files/{fileID}", a.downloadFile)
 				r.Get("/{requestID}/action-runs", a.listActionRuns)
 				r.Post("/{requestID}/execute", a.executeChain)
+				r.Post("/{requestID}/response", a.setResponse)
 			})
 		})
 	})

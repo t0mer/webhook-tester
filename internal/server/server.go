@@ -55,7 +55,7 @@ func (s *Server) buildRouter() chi.Router {
 	r.Handle("/metrics", metrics.Handler())
 
 	// Management API (versioned).
-	r.Mount("/api/v1", api.New(s.store, s.cfg.BaseURL, s.hub, s.actions, s.schedules).Routes())
+	r.Mount("/api/v1", api.New(s.store, s.cfg.BaseURL, s.hub, s.actions, s.schedules, s.capturer).Routes())
 
 	// API docs (spec-first source of truth) with an embedded Swagger UI — no
 	// external CDN dependency, so docs work fully offline.
