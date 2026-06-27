@@ -11,11 +11,11 @@ const (
 
 // Request is a single captured inbound event (HTTP request, email, or DNS query).
 type Request struct {
-	UUID      string `json:"uuid"`
-	TokenID   string `json:"token_id"`
-	Type      string `json:"type"` // web | email | dns
-	Method    string `json:"method"`
-	IP        string `json:"ip"`
+	UUID    string `json:"uuid"`
+	TokenID string `json:"token_id"`
+	Type    string `json:"type"` // web | email | dns
+	Method  string `json:"method"`
+	IP      string `json:"ip"`
 
 	// Optional geo data, populated only when a GeoIP database is configured.
 	Country     string `json:"country,omitempty"`

@@ -75,6 +75,22 @@ paths:
       responses:
         "204": { description: Deleted }
         "404": { description: Not found }
+  /tokens/{tokenID}/stream:
+    parameters:
+      - $ref: "#/components/parameters/TokenID"
+    get:
+      summary: Stream newly captured requests (Server-Sent Events)
+      operationId: streamRequests
+      description: |
+        Opens a long-lived `text/event-stream`. Each captured request is sent as
+        an `event: request` with the JSON request object as `data`. Comment lines
+        (`: ping`) are heartbeats.
+      responses:
+        "200":
+          description: SSE stream
+          content:
+            text/event-stream:
+              schema: { type: string }
   /tokens/{tokenID}/requests:
     parameters:
       - $ref: "#/components/parameters/TokenID"

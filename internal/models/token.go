@@ -16,9 +16,9 @@ type Token struct {
 	Actions            bool       `json:"actions"`       // custom actions enabled
 	RequestLimit       int        `json:"request_limit"` // max stored requests (0 = unlimited)
 	Description        string     `json:"description"`
-	Listen             int        `json:"listen"`            // CLI forwarding window (seconds)
-	Redirect           string     `json:"redirect"`          // redirect target URL
-	Password           string     `json:"-"`                 // basic-auth password, AES-GCM encrypted at rest
+	Listen             int        `json:"listen"`   // CLI forwarding window (seconds)
+	Redirect           string     `json:"redirect"` // redirect target URL
+	Password           string     `json:"-"`        // basic-auth password, AES-GCM encrypted at rest
 	GroupID            string     `json:"group_id,omitempty"`
 	Premium            bool       `json:"premium"` // always true self-hosted
 	CreatedAt          time.Time  `json:"created_at"`

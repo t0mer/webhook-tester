@@ -13,6 +13,7 @@ import (
 	"github.com/t0mer/raptor/internal/api"
 	"github.com/t0mer/raptor/internal/capture"
 	"github.com/t0mer/raptor/internal/config"
+	"github.com/t0mer/raptor/internal/sse"
 	"github.com/t0mer/raptor/internal/store"
 	"github.com/t0mer/raptor/internal/version"
 )
@@ -22,12 +23,13 @@ type Server struct {
 	cfg      config.Config
 	store    *store.Store
 	capturer *capture.Capturer
+	hub      *sse.Hub
 	router   chi.Router
 }
 
 // New builds a Server and its router.
-func New(cfg config.Config, st *store.Store, capturer *capture.Capturer) *Server {
-	s := &Server{cfg: cfg, store: st, capturer: capturer}
+func New(cfg config.Config, st *store.Store, capturer *capture.Capturer, hub *sse.Hub) *Server {
+	s := &Server{cfg: cfg, store: st, capturer: capturer, hub: hub}
 	s.router = s.buildRouter()
 	return s
 }
@@ -47,7 +49,7 @@ func (s *Server) buildRouter() chi.Router {
 	r.Get("/health", s.health)
 
 	// Management API (versioned).
-	r.Mount("/api/v1", api.New(s.store, s.cfg.BaseURL).Routes())
+	r.Mount("/api/v1", api.New(s.store, s.cfg.BaseURL, s.hub).Routes())
 
 	// API docs (spec-first source of truth) with an embedded Swagger UI — no
 	// external CDN dependency, so docs work fully offline.

@@ -20,6 +20,7 @@ import (
 	"github.com/t0mer/raptor/internal/capture"
 	"github.com/t0mer/raptor/internal/config"
 	"github.com/t0mer/raptor/internal/server"
+	"github.com/t0mer/raptor/internal/sse"
 	"github.com/t0mer/raptor/internal/store"
 	"github.com/t0mer/raptor/internal/version"
 )
@@ -62,8 +63,12 @@ func run(cfg config.Config, logger *slog.Logger) error {
 	}
 	defer st.Close()
 
-	capturer := capture.New(st, cfg.BaseURL, capture.WithGlobalRequestLimit(cfg.MaxRequests))
-	srv := server.New(cfg, st, capturer)
+	hub := sse.NewHub()
+	capturer := capture.New(st, cfg.BaseURL,
+		capture.WithGlobalRequestLimit(cfg.MaxRequests),
+		capture.WithPublisher(hub),
+	)
+	srv := server.New(cfg, st, capturer, hub)
 
 	httpSrv := &http.Server{
 		Addr:              ":" + strconv.Itoa(cfg.Port),
