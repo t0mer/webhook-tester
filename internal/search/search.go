@@ -1,6 +1,5 @@
 // Package search parses the request-search query DSL into a parameterised SQL
-// WHERE fragment. The grammar is a pragmatic subset of webhook.site's
-// Lucene-style search:
+// WHERE fragment. The grammar is a pragmatic, Lucene-style search subset:
 //
 //	free text            → matches request content
 //	content:foo          → content contains "foo"

@@ -5,9 +5,9 @@ import (
 	"time"
 )
 
-// rateLimiter enforces a per-token sliding-window request cap. webhook.site
-// derives the limit from the token's timeout as 100/timeout requests per minute;
-// a timeout of 0 means unlimited.
+// rateLimiter enforces a per-token sliding-window request cap. The limit is
+// derived from the token's timeout as 100/timeout requests per minute; a
+// timeout of 0 means unlimited.
 type rateLimiter struct {
 	mu     sync.Mutex
 	window time.Duration

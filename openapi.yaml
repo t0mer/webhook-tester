@@ -2,9 +2,9 @@ openapi: 3.0.3
 info:
   title: Raptor API
   description: |
-    Self-hosted webhook/email/DNS capture & inspection — a Go rewrite of
-    webhook.site. This document is the spec-first source of truth for the
-    versioned management API under `/api/v1`. The SPA is a pure client of it.
+    Self-hosted webhook/email/DNS capture & inspection. This document is the
+    spec-first source of truth for the versioned management API under `/api/v1`.
+    The SPA is a pure client of it.
 
     **Authentication.** When `--require-auth` is enabled, send `Api-Key: <uuid>`.
     With no key configured the API is open (first-run bootstrap mode).

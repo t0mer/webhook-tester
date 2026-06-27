@@ -1,5 +1,5 @@
 // Command raptor is a self-hosted webhook/email/DNS capture and inspection
-// server — a Go rewrite of webhook.site. See CLAUDE.md for the design contract.
+// server. See CLAUDE.md for the design contract.
 package main
 
 import (

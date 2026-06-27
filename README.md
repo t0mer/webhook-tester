@@ -1,9 +1,9 @@
 # Raptor
 
-**Self-hosted webhook, email & DNS capture and inspection** — a Go rewrite of
-[webhook.site](https://webhook.site). Spin up instant, unique URLs that capture,
-inspect and (in later phases) transform, automate and forward inbound HTTP
-requests — all from a single static binary with an embedded UI.
+**Self-hosted webhook, email & DNS capture and inspection.** Spin up instant,
+unique URLs that capture, inspect and (in later phases) transform, automate and
+forward inbound HTTP requests, emails and DNS queries — all from a single static
+binary with an embedded UI.
 
 > Raptor is built in reviewable phases. **Phases 1–3 (current)** deliver the core
 > HTTP capture engine, inspection API, a real-time web inbox, request search,
