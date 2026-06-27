@@ -5,10 +5,10 @@
 inspect and (in later phases) transform, automate and forward inbound HTTP
 requests — all from a single static binary with an embedded UI.
 
-> Raptor is built in reviewable phases. **Phase 1 (this release)** delivers the
-> core capture engine, inspection API and a real-time web inbox. Email/DNS
-> capture, custom actions, schedules and accounts land in later phases (see
-> [Roadmap](#roadmap)).
+> Raptor is built in reviewable phases. **Phases 1–2 (current)** deliver the core
+> capture engine, inspection API, a real-time web inbox, request search, groups
+> and a control panel. Email/DNS capture, custom actions, schedules and accounts
+> land in later phases (see [Roadmap](#roadmap)).
 
 ## Screenshots
 
@@ -17,6 +17,12 @@ requests — all from a single static binary with an embedded UI.
 | Light | Dark |
 | --- | --- |
 | ![Inbox, light theme](assets/screenshots/inbox-light.png) | ![Inbox, dark theme](assets/screenshots/inbox-dark.png) |
+
+### Search & Control Panel
+
+| Search DSL | Control Panel |
+| --- | --- |
+| ![Filtering requests with the search DSL](assets/screenshots/search-dark.png) | ![Control Panel managing URLs and groups](assets/screenshots/control-panel-dark.png) |
 
 ### Mobile (responsive)
 
@@ -43,6 +49,19 @@ requests — all from a single static binary with an embedded UI.
   interactive Swagger UI at `/api/docs`.
 - **Operations** — CSV export of captured requests, Prometheus metrics at
   `/metrics`, JSON health at `/health`.
+
+### Phase 2 — Request management
+
+- **Search DSL** — filter the inbox with a Lucene-style query: free text matches
+  the body, plus `method:POST`, `type:web`, `content:charge`, `ip:`, `host:`,
+  `url:`, `query:`, `headers.x-event:push`, `_exists_:custom_action_errors`, and
+  date ranges like `created_at:[* TO now-14d]`. Terms are ANDed.
+- **Subset delete** — delete only the requests matching a search query or
+  `date_from`/`date_to` window, or clear everything.
+- **Groups** — organise URLs into colour-coded groups; the sidebar buckets them
+  and a group can be deleted without losing its URLs.
+- **Control Panel** — manage every URL and group from one table: reassign groups,
+  open or delete URLs, and create/delete groups.
 
 ## Quick start
 
@@ -113,11 +132,14 @@ Key endpoints:
 | `POST` | `/api/v1/tokens` | Create a capture URL |
 | `GET` | `/api/v1/tokens` | List URLs |
 | `PUT` / `DELETE` | `/api/v1/tokens/{id}` | Update / delete a URL |
-| `GET` | `/api/v1/tokens/{id}/requests` | List captured requests (paged) |
+| `GET` | `/api/v1/tokens/{id}/requests` | List captured requests (paged; `q`/`date_from`/`date_to` search) |
+| `DELETE` | `/api/v1/tokens/{id}/requests` | Delete all, or a `q`/date subset |
 | `GET` | `/api/v1/tokens/{id}/requests/latest` | Most recent request |
 | `GET` | `/api/v1/tokens/{id}/requests/{rid}/raw` | Raw request text |
 | `GET` | `/api/v1/tokens/{id}/requests.csv` | CSV export |
 | `GET` | `/api/v1/tokens/{id}/stream` | SSE stream of new requests |
+| `GET` `POST` | `/api/v1/groups` | List / create groups |
+| `PUT` `DELETE` | `/api/v1/groups/{id}` | Update / delete a group |
 
 When `--require-auth` is set, send `Api-Key: <uuid>`. With no key configured the
 API is open (documented first-run bootstrap mode).
@@ -138,7 +160,7 @@ is embedded into the Go binary via `embed.FS`, so production ships a single file
 | Phase | Scope |
 | --- | --- |
 | **1 — Core capture** *(done)* | URLs, HTTP capture, inspection API, real-time SPA inbox, default responses, CSV, metrics |
-| 2 — Response control | Custom responses, request search DSL, groups, control panel |
+| **2 — Response control** *(done)* | Request search DSL, subset delete, groups, control panel |
 | 3 — Email + DNS | Inbound SMTP (`@emailhook`) and DNS (`.dnshook`) capture |
 | 4 — Custom Actions | Action chain engine, variables, conditions, scripting |
 | 5 — Schedules & replay | Cron schedules, alerting, request replay, CLI forwarding |
