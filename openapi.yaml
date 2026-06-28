@@ -187,6 +187,165 @@ paths:
                 properties:
                   replayed: { type: integer }
                   failed: { type: integer }
+  /auth/status:
+    get:
+      summary: Auth/bootstrap status and current user
+      operationId: authStatus
+      responses:
+        "200":
+          description: Status
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  bootstrapped: { type: boolean }
+                  require_auth: { type: boolean }
+                  authenticated: { type: boolean }
+                  user: { $ref: "#/components/schemas/User" }
+  /auth/bootstrap:
+    post:
+      summary: Create the first admin (only when no users exist)
+      operationId: bootstrap
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/Credentials" }
+      responses:
+        "201": { description: Admin created and signed in }
+        "409": { description: Already initialised }
+  /auth/login:
+    post:
+      summary: Sign in (sets a session cookie)
+      operationId: login
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/Credentials" }
+      responses:
+        "200": { description: Signed in }
+        "401": { description: Invalid credentials }
+  /auth/logout:
+    post:
+      summary: Sign out
+      operationId: logout
+      responses:
+        "204": { description: Signed out }
+  /auth/me:
+    get:
+      summary: Current authenticated user
+      operationId: me
+      responses:
+        "200":
+          description: User
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/User" }
+        "401": { description: Not authenticated }
+  /account/api-keys:
+    get:
+      summary: List the current user's API keys
+      operationId: listAPIKeys
+      responses:
+        "200":
+          description: API keys
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { type: array, items: { $ref: "#/components/schemas/APIKey" } }
+    post:
+      summary: Create an API key (plaintext returned once)
+      operationId: createAPIKey
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties: { name: { type: string } }
+      responses:
+        "201":
+          description: Created key (the `key` field is shown only here)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  key: { type: string }
+                  api_key: { $ref: "#/components/schemas/APIKey" }
+  /account/api-keys/{keyID}:
+    parameters:
+      - { name: keyID, in: path, required: true, schema: { type: string } }
+    delete:
+      summary: Revoke an API key
+      operationId: deleteAPIKey
+      responses:
+        "204": { description: Revoked }
+  /users:
+    get:
+      summary: List users (admin)
+      operationId: listUsers
+      responses:
+        "200":
+          description: Users
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { type: array, items: { $ref: "#/components/schemas/User" } }
+        "403": { description: Admin role required }
+    post:
+      summary: Create a user (admin)
+      operationId: createUser
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password]
+              properties:
+                email: { type: string }
+                password: { type: string }
+                role: { type: string, enum: [admin, user] }
+      responses:
+        "201":
+          description: Created user
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/User" }
+  /users/{userID}:
+    parameters:
+      - { name: userID, in: path, required: true, schema: { type: string } }
+    put:
+      summary: Update a user (admin)
+      operationId: updateUser
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                email: { type: string }
+                password: { type: string }
+                role: { type: string, enum: [admin, user] }
+      responses:
+        "200":
+          description: Updated user
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/User" }
+    delete:
+      summary: Delete a user (admin)
+      operationId: deleteUser
+      responses:
+        "204": { description: Deleted }
   /action-types:
     get:
       summary: List available Custom Action type names
@@ -707,6 +866,28 @@ components:
         status_code: { type: integer }
         message: { type: string }
         duration_ms: { type: integer }
+        created_at: { type: string, format: date-time }
+    Credentials:
+      type: object
+      required: [email, password]
+      properties:
+        email: { type: string }
+        password: { type: string }
+    User:
+      type: object
+      properties:
+        id: { type: string }
+        email: { type: string }
+        role: { type: string, enum: [admin, user] }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+    APIKey:
+      type: object
+      properties:
+        id: { type: string }
+        user_id: { type: string }
+        name: { type: string }
+        last_used_at: { type: string, format: date-time, nullable: true }
         created_at: { type: string, format: date-time }
   securitySchemes:
     ApiKey:

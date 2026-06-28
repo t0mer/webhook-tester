@@ -43,6 +43,10 @@ type Config struct {
 	// ShowVersion is true when --version was passed; the caller prints the
 	// version and exits.
 	ShowVersion bool
+
+	// ResetPassword is true when --reset-password was passed; the caller runs
+	// the interactive admin password reset and exits.
+	ResetPassword bool
 }
 
 // Defaults returns a Config populated with the built-in default values.
@@ -85,6 +89,7 @@ func Load(args []string, getenv func(string) string) (Config, error) {
 	allow := fs.String("action-allow", "", "comma-separated allow-list of hosts for outbound actions")
 	deny := fs.String("action-deny", "", "comma-separated deny-list of hosts for outbound actions")
 	fs.BoolVar(&cfg.ActionAllowInternal, "action-allow-internal", false, "permit outbound actions to reach internal/loopback hosts")
+	fs.BoolVar(&cfg.ResetPassword, "reset-password", false, "interactively set an admin password and exit")
 	fs.BoolVarP(&cfg.ShowVersion, "version", "v", false, "print version and exit")
 
 	if err := fs.Parse(args); err != nil {

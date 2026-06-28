@@ -18,6 +18,7 @@ require (
 	github.com/swaggest/swgui v1.8.8
 	github.com/tidwall/gjson v1.19.0
 	golang.org/x/crypto v0.53.0
+	golang.org/x/term v0.44.0
 	modernc.org/sqlite v1.53.0
 )
 

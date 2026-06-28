@@ -95,6 +95,12 @@ func run(cfg config.Config, logger *slog.Logger) error {
 		capture.WithActions(actionsSvc),
 	)
 	authSvc := auth.NewService(st)
+
+	// --reset-password: set an admin password interactively and exit.
+	if cfg.ResetPassword {
+		return resetPassword(st, authSvc)
+	}
+
 	// Seed an initial admin from the environment on first run (optional).
 	if seeded, err := authSvc.SeedAdminIfEmpty(context.Background(),
 		os.Getenv("RAPTOR_ADMIN_EMAIL"), os.Getenv("RAPTOR_ADMIN_PASSWORD")); err != nil {
