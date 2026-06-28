@@ -174,8 +174,11 @@ before saving.
   interactive Swagger UI at `/api/docs`.
 - **Operations** — CSV export of captured requests, Prometheus metrics at
   `/metrics`, JSON health at `/health`.
-- **Single binary** — pure-Go, `CGO_ENABLED=0`, SQLite / Postgres / MySQL storage, the
-  React UI embedded via `embed.FS`.
+- **Pick your database** — run on **SQLite** (default, zero-config), **PostgreSQL**
+  or **MySQL** with the same schema; select it with `RAPTOR_DB_DRIVER` and point
+  it at your server via environment variables. See [Database](#database).
+- **Single binary** — pure-Go, `CGO_ENABLED=0`, all three database drivers
+  CGO-free, the React UI embedded via `embed.FS`.
 
 ## Security
 
