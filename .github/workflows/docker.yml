@@ -4,14 +4,14 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: "Version tag (leave blank to use the latest git tag, else auto-compute)"
+        description: "Version (blank = auto-increment YYYY.M.PATCH from the latest tag)"
         required: false
   workflow_run:
     workflows: [Release]
     types: [completed]
 
 permissions:
-  contents: read
+  contents: write # needed to push the version tag that drives auto-increment
 
 jobs:
   docker:
@@ -20,28 +20,34 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          fetch-depth: 0
+          fetch-depth: 0 # need all tags to compute/inspect the version
 
       - name: Resolve version
         id: version
         env:
           INPUT_VERSION: ${{ github.event.inputs.version }}
+          EVENT_NAME: ${{ github.event_name }}
         run: |
           set -euo pipefail
-          # Prefer an explicit input, then the latest git tag, then a computed
-          # date-based version — never empty (an empty tag is an invalid ref).
-          VERSION="$INPUT_VERSION"
-          if [ -z "$VERSION" ]; then
-            VERSION="$(git describe --tags --abbrev=0 2>/dev/null || true)"
-          fi
-          if [ -z "$VERSION" ]; then
+          NEEDS_TAG=true
+          if [ -n "$INPUT_VERSION" ]; then
+            # Explicit version requested.
+            VERSION="$INPUT_VERSION"
+          elif [ "$EVENT_NAME" = "workflow_run" ]; then
+            # Triggered by a completed Release, which already created the tag —
+            # reuse it and don't tag again.
+            VERSION="$(git describe --tags --abbrev=0)"
+            NEEDS_TAG=false
+          else
+            # Manual run: bump the patch (YYYY.M.PATCH) past the latest tag.
             VERSION="$(./scripts/next-version.sh)"
           fi
           if [ -z "$VERSION" ]; then
             echo "::error::could not resolve a version"; exit 1
           fi
-          echo "Resolved version: $VERSION"
+          echo "Resolved version: $VERSION (tag after push: $NEEDS_TAG)"
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "needs_tag=$NEEDS_TAG" >> "$GITHUB_OUTPUT"
 
       - uses: docker/setup-qemu-action@v3
       - uses: docker/setup-buildx-action@v3
@@ -60,3 +66,17 @@ jobs:
           tags: |
             techblog/raptor:latest
             techblog/raptor:${{ steps.version.outputs.version }}
+
+      # Tag the repo with the published version so the next manual run increments
+      # the patch. Runs only after a successful push, and not for Release-driven
+      # runs (the Release workflow owns its tag).
+      - name: Tag published version
+        if: steps.version.outputs.needs_tag == 'true'
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          set -euo pipefail
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git tag "$VERSION"
+          git push origin "$VERSION"
