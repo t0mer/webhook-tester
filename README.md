@@ -174,7 +174,7 @@ before saving.
   interactive Swagger UI at `/api/docs`.
 - **Operations** — CSV export of captured requests, Prometheus metrics at
   `/metrics`, JSON health at `/health`.
-- **Single binary** — pure-Go, `CGO_ENABLED=0`, SQLite (or Postgres) storage, the
+- **Single binary** — pure-Go, `CGO_ENABLED=0`, SQLite / Postgres / MySQL storage, the
   React UI embedded via `embed.FS`.
 
 ## Security
@@ -209,7 +209,10 @@ email/DNS suffixes, action SSRF policy) as comments — uncomment what you need.
 
 Use a **named volume** for `/data` (not a host bind mount: the image runs as a
 non-root user, and a root-owned bind-mounted directory isn't writable). `/data`
-holds the SQLite database **and** the generated AES key (`secret.key`), so keep it.
+holds the generated AES key (`secret.key`) and uploaded files — and, with the
+default SQLite driver, the database file too — so keep it. When using an external
+**Postgres/MySQL** database, `/data` still holds the key and uploads (persist it),
+while captured data lives in your database.
 
 ```bash
 docker volume create raptor-data
@@ -263,9 +266,15 @@ docker run -p 8084:8084 -v raptor-data:/data \
 | `--port` | `RAPTOR_PORT` | `8084` | HTTP port (app + capture + API) |
 | `--smtp-port` | `RAPTOR_SMTP_PORT` | `2525` | Inbound email listener |
 | `--dns-port` | `RAPTOR_DNS_PORT` | `5354` | Inbound DNS listener |
-| `--data` | `RAPTOR_DATA` | `/data` | SQLite + uploaded files directory |
-| `--db-driver` | `RAPTOR_DB_DRIVER` | `sqlite` | `sqlite` \| `postgres` |
-| `--db-dsn` | `RAPTOR_DB_DSN` | — | Postgres DSN when `--db-driver=postgres` |
+| `--data` | `RAPTOR_DATA` | `/data` | SQLite file + uploaded files directory |
+| `--db-driver` | `RAPTOR_DB_DRIVER` | `sqlite` | `sqlite` \| `postgres` \| `mysql` |
+| `--db-host` | `RAPTOR_DB_HOST` | — | Database host (postgres/mysql) |
+| `--db-port` | `RAPTOR_DB_PORT` | `0` | Database port (`0` = driver default: 5432/3306) |
+| `--db-name` | `RAPTOR_DB_NAME` | `raptor` | Database name (postgres/mysql) |
+| `--db-user` | `RAPTOR_DB_USER` | — | Database user (postgres/mysql) |
+| — | `RAPTOR_DB_PASSWORD` | — | Database password — **env only** (a secret) |
+| `--db-sslmode` | `RAPTOR_DB_SSLMODE` | `disable` | Postgres TLS mode: `disable`\|`require`\|`verify-ca`\|`verify-full` |
+| — | `RAPTOR_DB_DSN` | — | Full driver DSN override — **env only**; supersedes the fields above |
 | `--base-url` | `RAPTOR_BASE_URL` | `http://localhost:8084` | External base URL for copyable links |
 | `--email-domain` | `RAPTOR_EMAIL_DOMAIN` | `emailhook.site` | Inbound email suffix |
 | `--dns-domain` | `RAPTOR_DNS_DOMAIN` | `dnshook.site` | Inbound DNS suffix |
@@ -284,6 +293,53 @@ docker run -p 8084:8084 -v raptor-data:/data \
 
 **Precedence:** environment variable → `--flag` → built-in default (an env var,
 when set, overrides the flag).
+
+## Database
+
+Raptor runs on **SQLite** (default), **PostgreSQL** or **MySQL** — selected with
+`RAPTOR_DB_DRIVER`. All three use the same schema and are exercised by the same
+migrations; pick whichever your deployment already operates. The driver is
+pure-Go in every case, so the binary stays `CGO_ENABLED=0`.
+
+- **SQLite** (default) — zero-config; the database file lives in `--data`
+  (`/data/raptor.db`) alongside the encryption key. Ideal for single-node use.
+- **PostgreSQL** — set the host/credentials and Raptor builds the DSN for you:
+
+  ```bash
+  RAPTOR_DB_DRIVER=postgres
+  RAPTOR_DB_HOST=db
+  RAPTOR_DB_PORT=5432          # optional (default 5432)
+  RAPTOR_DB_NAME=raptor
+  RAPTOR_DB_USER=raptor
+  RAPTOR_DB_PASSWORD=secret
+  RAPTOR_DB_SSLMODE=disable    # disable | require | verify-ca | verify-full
+  ```
+
+- **MySQL** (8.0.13+) — same structured settings:
+
+  ```bash
+  RAPTOR_DB_DRIVER=mysql
+  RAPTOR_DB_HOST=db
+  RAPTOR_DB_PORT=3306          # optional (default 3306)
+  RAPTOR_DB_NAME=raptor
+  RAPTOR_DB_USER=raptor
+  RAPTOR_DB_PASSWORD=secret
+  ```
+
+Credentials come from the environment only (`RAPTOR_DB_PASSWORD` and the DSN are
+never command-line flags). The target database must already exist; Raptor creates
+and migrates its own tables on startup. To bypass the structured fields entirely,
+set a ready-made DSN with **`RAPTOR_DB_DSN`** (it supersedes everything above):
+
+```bash
+# Postgres
+RAPTOR_DB_DSN=postgres://raptor:secret@db:5432/raptor?sslmode=disable
+# MySQL (Raptor forces ANSI_QUOTES/utf8mb4/UTC even on a DSN override)
+RAPTOR_DB_DSN="raptor:secret@tcp(db:3306)/raptor"
+```
+
+> SQLite remains the simplest choice. Reach for Postgres/MySQL when you want a
+> managed/shared database or multiple Raptor replicas against one store.
 
 ## API
 

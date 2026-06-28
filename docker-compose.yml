@@ -18,6 +18,17 @@ services:
     environment:
       RAPTOR_BASE_URL: http://localhost:8084
       RAPTOR_LOG_LEVEL: info
+      # --- Database (optional; default is the embedded SQLite file under /data) ---
+      # Switch to Postgres or MySQL by setting the driver + connection details.
+      # The password (and the RAPTOR_DB_DSN override) are secrets — env only.
+      # RAPTOR_DB_DRIVER: postgres        # sqlite | postgres | mysql
+      # RAPTOR_DB_HOST: db
+      # RAPTOR_DB_PORT: "5432"            # 0/unset = driver default (5432/3306)
+      # RAPTOR_DB_NAME: raptor
+      # RAPTOR_DB_USER: raptor
+      # RAPTOR_DB_PASSWORD: secret
+      # RAPTOR_DB_SSLMODE: disable        # postgres TLS mode
+      # RAPTOR_DB_DSN: ""                 # full DSN override (supersedes the above)
       # --- Accounts (optional; default is anonymous-by-default + open signups) ---
       # RAPTOR_REQUIRE_AUTH: "true"            # private mode: require login, no anonymous access
       # RAPTOR_ALLOW_REGISTRATION: "false"     # lock new signups (existing users can still log in)
@@ -31,6 +42,30 @@ services:
       # RAPTOR_ACTION_DENY: "169.254.169.254"
       # RAPTOR_ACTION_ALLOW_INTERNAL: "true"   # permit actions/replay/schedules to reach internal hosts
     restart: unless-stopped
+    # Uncomment when using the bundled Postgres service below.
+    # depends_on:
+    #   db:
+    #     condition: service_healthy
+
+  # --- Optional Postgres backend ---------------------------------------------
+  # Uncomment this service and the RAPTOR_DB_* env vars above to run Raptor on
+  # Postgres instead of SQLite. (A MySQL service would be analogous: image
+  # mysql:8.0 with MYSQL_DATABASE/MYSQL_USER/MYSQL_PASSWORD, port 3306.)
+  # db:
+  #   image: postgres:16-alpine
+  #   environment:
+  #     POSTGRES_DB: raptor
+  #     POSTGRES_USER: raptor
+  #     POSTGRES_PASSWORD: secret
+  #   volumes:
+  #     - raptor-db:/var/lib/postgresql/data
+  #   healthcheck:
+  #     test: ["CMD-SHELL", "pg_isready -U raptor -d raptor"]
+  #     interval: 5s
+  #     timeout: 5s
+  #     retries: 10
+  #   restart: unless-stopped
 
 volumes:
   raptor-data:
+  # raptor-db:   # uncomment alongside the Postgres service above
