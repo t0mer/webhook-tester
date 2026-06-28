@@ -7,6 +7,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
 
+	"github.com/t0mer/raptor/internal/auth"
 	"github.com/t0mer/raptor/internal/models"
 	"github.com/t0mer/raptor/internal/store"
 )
@@ -46,11 +47,16 @@ func (a *API) createToken(w http.ResponseWriter, r *http.Request) {
 		DefaultContentType: "text/plain",
 		Premium:            true,
 	}
+	// Assign ownership to the creating user (empty in open mode).
+	owner := ""
+	if u, ok := auth.UserFromContext(r.Context()); ok {
+		owner = u.ID
+	}
 
-	// Optionally clone settings from an existing token.
+	// Optionally clone settings from an existing token the caller can access.
 	if body.CloneFrom != nil && *body.CloneFrom != "" {
 		src, err := a.store.GetToken(r.Context(), *body.CloneFrom)
-		if err != nil {
+		if err != nil || !a.canAccessToken(r, src) {
 			writeError(w, http.StatusBadRequest, "clone_from token not found")
 			return
 		}
@@ -62,6 +68,7 @@ func (a *API) createToken(w http.ResponseWriter, r *http.Request) {
 	}
 
 	applyTokenRequest(tok, &body)
+	tok.UserID = owner
 
 	if tok.Alias != "" {
 		if _, err := a.store.GetTokenByAlias(r.Context(), tok.Alias); err == nil {
@@ -78,7 +85,17 @@ func (a *API) createToken(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *API) listTokens(w http.ResponseWriter, r *http.Request) {
-	tokens, err := a.store.ListTokens(r.Context())
+	// Non-admin authenticated users see only their own URLs; open mode and admins
+	// see all.
+	var (
+		tokens []*models.Token
+		err    error
+	)
+	if u, ok := auth.UserFromContext(r.Context()); ok && !u.IsAdmin() {
+		tokens, err = a.store.ListTokensForUser(r.Context(), u.ID)
+	} else {
+		tokens, err = a.store.ListTokens(r.Context())
+	}
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to list tokens")
 		return
@@ -126,19 +143,20 @@ func (a *API) updateToken(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *API) deleteToken(w http.ResponseWriter, r *http.Request) {
-	id := chi.URLParam(r, "tokenID")
-	if err := a.store.DeleteToken(r.Context(), id); err != nil {
-		if errors.Is(err, store.ErrNotFound) {
-			writeError(w, http.StatusNotFound, "token not found")
-			return
-		}
+	tok, ok := a.loadToken(w, r)
+	if !ok {
+		return
+	}
+	if err := a.store.DeleteToken(r.Context(), tok.UUID); err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to delete token")
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
 }
 
-// loadToken resolves the {tokenID} URL param (by UUID then alias).
+// loadToken resolves the {tokenID} URL param (by UUID then alias) and enforces
+// ownership: a user may only access their own URLs (admins and open mode see
+// all). A token the caller may not access is reported as not found.
 func (a *API) loadToken(w http.ResponseWriter, r *http.Request) (*models.Token, bool) {
 	id := chi.URLParam(r, "tokenID")
 	tok, err := a.store.GetToken(r.Context(), id)
@@ -153,7 +171,25 @@ func (a *API) loadToken(w http.ResponseWriter, r *http.Request) (*models.Token, 
 		writeError(w, http.StatusInternalServerError, "failed to load token")
 		return nil, false
 	}
+	if !a.canAccessToken(r, tok) {
+		writeError(w, http.StatusNotFound, "token not found")
+		return nil, false
+	}
 	return tok, true
+}
+
+// canAccessToken reports whether the request's user may manage a token. In open
+// mode (no authenticated user) all access is allowed; admins access everything;
+// otherwise the user must own the token.
+func (a *API) canAccessToken(r *http.Request, tok *models.Token) bool {
+	u, ok := auth.UserFromContext(r.Context())
+	if !ok {
+		return true
+	}
+	if u.IsAdmin() {
+		return true
+	}
+	return tok.UserID == u.ID
 }
 
 func applyTokenRequest(tok *models.Token, body *tokenRequest) {
