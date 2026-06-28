@@ -124,6 +124,12 @@ func (s *Store) GetAPIKeyByHash(ctx context.Context, hash string) (*models.APIKe
 		`SELECT id, user_id, name, key_hash, last_used_at, created_at FROM api_keys WHERE key_hash = ?`, hash))
 }
 
+// GetAPIKey looks up an API key by id.
+func (s *Store) GetAPIKey(ctx context.Context, id string) (*models.APIKey, error) {
+	return scanAPIKey(s.db.QueryRowContext(ctx,
+		`SELECT id, user_id, name, key_hash, last_used_at, created_at FROM api_keys WHERE id = ?`, id))
+}
+
 // ListAPIKeys returns a user's API keys, newest first.
 func (s *Store) ListAPIKeys(ctx context.Context, userID string) ([]*models.APIKey, error) {
 	rows, err := s.db.QueryContext(ctx,

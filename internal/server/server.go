@@ -4,6 +4,7 @@ package server
 
 import (
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -12,6 +13,7 @@ import (
 
 	"github.com/t0mer/raptor/internal/actions"
 	"github.com/t0mer/raptor/internal/api"
+	"github.com/t0mer/raptor/internal/auth"
 	"github.com/t0mer/raptor/internal/capture"
 	"github.com/t0mer/raptor/internal/config"
 	"github.com/t0mer/raptor/internal/metrics"
@@ -31,12 +33,13 @@ type Server struct {
 	actions   *actions.Service
 	schedules *schedules.Runner
 	guard     *netguard.Guard
+	auth      *auth.Service
 	router    chi.Router
 }
 
 // New builds a Server and its router.
-func New(cfg config.Config, st *store.Store, capturer *capture.Capturer, hub *sse.Hub, actionsSvc *actions.Service, runner *schedules.Runner, guard *netguard.Guard) *Server {
-	s := &Server{cfg: cfg, store: st, capturer: capturer, hub: hub, actions: actionsSvc, schedules: runner, guard: guard}
+func New(cfg config.Config, st *store.Store, capturer *capture.Capturer, hub *sse.Hub, actionsSvc *actions.Service, runner *schedules.Runner, guard *netguard.Guard, authSvc *auth.Service) *Server {
+	s := &Server{cfg: cfg, store: st, capturer: capturer, hub: hub, actions: actionsSvc, schedules: runner, guard: guard, auth: authSvc}
 	s.router = s.buildRouter()
 	return s
 }
@@ -57,7 +60,18 @@ func (s *Server) buildRouter() chi.Router {
 	r.Handle("/metrics", metrics.Handler())
 
 	// Management API (versioned).
-	r.Mount("/api/v1", api.New(s.store, s.cfg.BaseURL, s.hub, s.actions, s.schedules, s.capturer, s.guard).Routes())
+	r.Mount("/api/v1", api.New(api.Deps{
+		Store:         s.store,
+		BaseURL:       s.cfg.BaseURL,
+		Hub:           s.hub,
+		Actions:       s.actions,
+		Schedules:     s.schedules,
+		Forwarder:     s.capturer,
+		Guard:         s.guard,
+		Auth:          s.auth,
+		RequireAuth:   s.cfg.RequireAuth,
+		SecureCookies: strings.HasPrefix(s.cfg.BaseURL, "https://"),
+	}).Routes())
 
 	// API docs (spec-first source of truth) with an embedded Swagger UI — no
 	// external CDN dependency, so docs work fully offline.

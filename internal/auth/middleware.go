@@ -18,8 +18,9 @@ const userKey ctxKey = iota
 // publicPaths are reachable without authentication so login and first-run
 // bootstrap can work even when the API is gated.
 var publicPaths = map[string]bool{
-	"/api/v1/auth/login":  true,
-	"/api/v1/auth/status": true,
+	"/api/v1/auth/login":     true,
+	"/api/v1/auth/status":    true,
+	"/api/v1/auth/bootstrap": true,
 }
 
 // UserFromContext returns the authenticated user, if any.

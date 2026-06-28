@@ -18,6 +18,7 @@ import (
 	flag "github.com/spf13/pflag"
 
 	"github.com/t0mer/raptor/internal/actions"
+	"github.com/t0mer/raptor/internal/auth"
 	"github.com/t0mer/raptor/internal/capture"
 	"github.com/t0mer/raptor/internal/config"
 	"github.com/t0mer/raptor/internal/crypto"
@@ -93,8 +94,17 @@ func run(cfg config.Config, logger *slog.Logger) error {
 		capture.WithFilesDir(filepath.Join(cfg.Data, "files")),
 		capture.WithActions(actionsSvc),
 	)
+	authSvc := auth.NewService(st)
+	// Seed an initial admin from the environment on first run (optional).
+	if seeded, err := authSvc.SeedAdminIfEmpty(context.Background(),
+		os.Getenv("RAPTOR_ADMIN_EMAIL"), os.Getenv("RAPTOR_ADMIN_PASSWORD")); err != nil {
+		return fmt.Errorf("seed admin: %w", err)
+	} else if seeded {
+		logger.Info("seeded admin user from environment")
+	}
+
 	scheduleRunner := schedules.New(st, actionsSvc, schedules.WithLogger(logger), schedules.WithGuard(guard))
-	srv := server.New(cfg, st, capturer, hub, actionsSvc, scheduleRunner, guard)
+	srv := server.New(cfg, st, capturer, hub, actionsSvc, scheduleRunner, guard, authSvc)
 
 	httpSrv := &http.Server{
 		Addr:              ":" + strconv.Itoa(cfg.Port),
