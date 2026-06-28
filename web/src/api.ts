@@ -100,6 +100,29 @@ export interface ActionInput {
   parameters?: Record<string, unknown>
 }
 
+export interface User {
+  id: string
+  email: string
+  role: string
+  created_at: string
+  updated_at: string
+}
+
+export interface AuthStatus {
+  bootstrapped: boolean
+  require_auth: boolean
+  authenticated: boolean
+  user?: User
+}
+
+export interface APIKey {
+  id: string
+  user_id: string
+  name: string
+  last_used_at?: string | null
+  created_at: string
+}
+
 export interface Schedule {
   uuid: string
   token_id?: string
@@ -227,6 +250,28 @@ export const api = {
     req<{ data: ActionRun[] }>(`/tokens/${id}/requests/${rid}/execute`, { method: 'POST' }).then(
       (r) => r.data ?? [],
     ),
+
+  authStatus: () => req<AuthStatus>('/auth/status'),
+  login: (email: string, password: string) =>
+    req<User>('/auth/login', { method: 'POST', body: JSON.stringify({ email, password }) }),
+  bootstrap: (email: string, password: string) =>
+    req<User>('/auth/bootstrap', { method: 'POST', body: JSON.stringify({ email, password }) }),
+  logout: () => req<void>('/auth/logout', { method: 'POST' }),
+
+  listAPIKeys: () => req<{ data: APIKey[] }>('/account/api-keys').then((r) => r.data ?? []),
+  createAPIKey: (name: string) =>
+    req<{ key: string; api_key: APIKey }>('/account/api-keys', {
+      method: 'POST',
+      body: JSON.stringify({ name }),
+    }),
+  deleteAPIKey: (id: string) => req<void>(`/account/api-keys/${id}`, { method: 'DELETE' }),
+
+  listUsers: () => req<{ data: User[] }>('/users').then((r) => r.data ?? []),
+  createUser: (email: string, password: string, role: string) =>
+    req<User>('/users', { method: 'POST', body: JSON.stringify({ email, password, role }) }),
+  updateUser: (id: string, body: Partial<{ email: string; password: string; role: string }>) =>
+    req<User>(`/users/${id}`, { method: 'PUT', body: JSON.stringify(body) }),
+  deleteUser: (id: string) => req<void>(`/users/${id}`, { method: 'DELETE' }),
 
   listSchedules: () => req<{ data: Schedule[] }>('/schedules').then((r) => r.data ?? []),
   createSchedule: (body: ScheduleInput) =>

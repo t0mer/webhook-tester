@@ -1,5 +1,6 @@
 import { BoltIcon, MenuIcon, MoonIcon, PlusIcon, SunIcon } from './icons'
 import type { Theme } from '../useTheme'
+import type { User } from '../api'
 
 interface Props {
   theme: Theme
@@ -7,9 +8,21 @@ interface Props {
   onNewToken: () => void
   onToggleSidebar: () => void
   onHome: () => void
+  currentUser?: User
+  onAccount: () => void
+  onLogout: () => void
 }
 
-export function Navbar({ theme, onToggleTheme, onNewToken, onToggleSidebar, onHome }: Props) {
+export function Navbar({
+  theme,
+  onToggleTheme,
+  onNewToken,
+  onToggleSidebar,
+  onHome,
+  currentUser,
+  onAccount,
+  onLogout,
+}: Props) {
   return (
     <header className="flex items-center gap-3 border-b border-border bg-surface px-4 h-14 shrink-0">
       <button
@@ -47,6 +60,24 @@ export function Navbar({ theme, onToggleTheme, onNewToken, onToggleSidebar, onHo
         >
           {theme === 'dark' ? <SunIcon /> : <MoonIcon />}
         </button>
+
+        {currentUser && (
+          <div className="flex items-center gap-1 border-l border-border pl-2 ml-1">
+            <button
+              onClick={onAccount}
+              className="text-xs text-muted hover:text-text px-2 py-1 rounded-lg hover:bg-surface-2 max-w-[10rem] truncate"
+              title={currentUser.email}
+            >
+              {currentUser.email}
+            </button>
+            <button
+              onClick={onLogout}
+              className="text-xs text-muted hover:text-text px-2 py-1 rounded-lg hover:bg-surface-2"
+            >
+              Sign out
+            </button>
+          </div>
+        )}
       </div>
     </header>
   )

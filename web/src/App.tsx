@@ -1,5 +1,13 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { api, type CapturedRequest, type Group, type Token, type TokenInput } from './api'
+import {
+  api,
+  type AuthStatus,
+  type CapturedRequest,
+  type Group,
+  type Token,
+  type TokenInput,
+  type User,
+} from './api'
 import { copyText } from './lib'
 import { useTheme } from './useTheme'
 import { Navbar } from './components/Navbar'
@@ -12,22 +20,51 @@ import { ControlPanel } from './components/ControlPanel'
 import { ActionsEditor } from './components/ActionsEditor'
 import { SchedulesView } from './components/SchedulesView'
 import { ReplayDialog } from './components/ReplayDialog'
+import { AccountView } from './components/AccountView'
+import { Login } from './components/Login'
 import { CopyIcon, SettingsIcon, TrashIcon } from './components/icons'
 
 const ACTIVE_KEY = 'raptor-active'
 const GROUP_COLORS = ['#4f46e5', '#16a34a', '#d97706', '#dc2626', '#0891b2', '#7c3aed', '#db2777']
 
-type View = 'inbox' | 'panel' | 'schedules'
+type View = 'inbox' | 'panel' | 'schedules' | 'account'
 
 function initialState(): { view: View; active: string | null } {
   const hash = window.location.hash.replace(/^#\/?/, '')
   if (hash === 'panel') return { view: 'panel', active: localStorage.getItem(ACTIVE_KEY) }
   if (hash === 'schedules') return { view: 'schedules', active: localStorage.getItem(ACTIVE_KEY) }
+  if (hash === 'account') return { view: 'account', active: localStorage.getItem(ACTIVE_KEY) }
   if (hash) return { view: 'inbox', active: hash }
   return { view: 'inbox', active: localStorage.getItem(ACTIVE_KEY) }
 }
 
+// App gates the workspace behind authentication: it loads the auth status and
+// renders the first-run bootstrap or login form when required.
 export default function App() {
+  const [status, setStatus] = useState<AuthStatus | null>(null)
+
+  const load = useCallback(() => {
+    api
+      .authStatus()
+      .then(setStatus)
+      .catch(() => setStatus({ bootstrapped: true, require_auth: false, authenticated: false }))
+  }, [])
+  useEffect(() => {
+    load()
+  }, [load])
+
+  if (!status) return <div className="min-h-screen bg-bg" />
+
+  if (status.require_auth && !status.bootstrapped) {
+    return <Login mode="bootstrap" onAuthed={load} />
+  }
+  if (status.require_auth && !status.authenticated) {
+    return <Login mode="login" onAuthed={load} />
+  }
+  return <Workspace currentUser={status.user} onLogout={load} />
+}
+
+function Workspace({ currentUser, onLogout }: { currentUser?: User; onLogout: () => void }) {
   const { theme, toggle } = useTheme()
   const init = initialState()
   const [tokens, setTokens] = useState<Token[]>([])
@@ -149,6 +186,20 @@ export default function App() {
     setSidebarOpen(false)
   }
 
+  function openAccount() {
+    setView('account')
+    window.location.hash = '/account'
+    setSidebarOpen(false)
+  }
+
+  async function handleLogout() {
+    try {
+      await api.logout()
+    } finally {
+      onLogout()
+    }
+  }
+
   async function handleSaveSettings(body: TokenInput) {
     if (!activeToken) return
     const updated = await api.updateToken(activeToken.uuid, body)
@@ -211,6 +262,9 @@ export default function App() {
         onNewToken={handleCreate}
         onToggleSidebar={() => setSidebarOpen((o) => !o)}
         onHome={goHome}
+        currentUser={currentUser}
+        onAccount={openAccount}
+        onLogout={handleLogout}
       />
 
       {error && (
@@ -255,6 +309,8 @@ export default function App() {
           />
         ) : view === 'schedules' ? (
           <SchedulesView />
+        ) : view === 'account' ? (
+          <AccountView currentUser={currentUser} />
         ) : activeToken ? (
           <main className="flex-1 flex flex-col min-w-0">
             <TokenBar
